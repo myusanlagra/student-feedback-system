@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
 
 const app = express();
 const PORT = 3000;
@@ -10,11 +11,32 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Database - ဒီမှာ feedbacks array ကိုသတ်မှတ်ထားပါ
-let feedbacks = [];
-let nextId = 1;
+// SQLite Database setup
+const db = new sqlite3.Database('./feedback.db', (err) => {
+    if (err) {
+        console.error('❌ Database connection error:', err.message);
+    } else {
+        console.log('✅ Connected to SQLite database');
+        
+        // Create table if not exists
+        db.run(`CREATE TABLE IF NOT EXISTS feedbacks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            studentName TEXT NOT NULL,
+            course TEXT NOT NULL,
+            rating INTEGER NOT NULL,
+            comments TEXT,
+            date TEXT NOT NULL
+        )`, (err) => {
+            if (err) {
+                console.error('❌ Table creation error:', err.message);
+            } else {
+                console.log('✅ Feedbacks table ready');
+            }
+        });
+    }
+});
 
-// API Routes
+// API Routes - Database version
 app.post('/api/feedback', (req, res) => {
     console.log('📝 Received:', req.body);
     
@@ -28,32 +50,57 @@ app.post('/api/feedback', (req, res) => {
         });
     }
 
-    const newFeedback = {
-        id: nextId++,
-        studentName,
-        course, 
-        rating: parseInt(rating),
-        comments: comments || 'No comments',
-        date: new Date().toLocaleString()
-    };
+    const date = new Date().toLocaleString();
     
-    feedbacks.push(newFeedback);
-    console.log('💾 Saved feedback:', newFeedback);
-    console.log('📊 Total feedbacks:', feedbacks.length);
+    // Save to database
+    const sql = `INSERT INTO feedbacks (studentName, course, rating, comments, date) 
+                 VALUES (?, ?, ?, ?, ?)`;
     
-    res.json({ 
-        success: true, 
-        message: '✅ Feedback submitted successfully!',
-        data: newFeedback
+    db.run(sql, [studentName, course, parseInt(rating), comments || 'No comments', date], 
+    function(err) {
+        if (err) {
+            console.error('❌ Database insert error:', err.message);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Database error' 
+            });
+        }
+        
+        console.log('💾 Saved to database with ID:', this.lastID);
+        
+        res.json({ 
+            success: true, 
+            message: '✅ Feedback submitted successfully!',
+            data: {
+                id: this.lastID,
+                studentName,
+                course,
+                rating: parseInt(rating),
+                comments: comments || 'No comments',
+                date: date
+            }
+        });
     });
 });
 
-// Get all feedback - ဒီ function ကိုသေချာပြင်ပါ
+// Get all feedback from database
 app.get('/api/feedback', (req, res) => {
-    console.log('📋 Fetching all feedbacks. Total:', feedbacks.length);
-    res.json({ 
-        success: true, 
-        data: feedbacks 
+    const sql = `SELECT * FROM feedbacks ORDER BY id DESC`;
+    
+    db.all(sql, [], (err, rows) => {
+        if (err) {
+            console.error('❌ Database select error:', err.message);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Database error' 
+            });
+        }
+        
+        console.log('📋 Fetched', rows.length, 'feedbacks from database');
+        res.json({ 
+            success: true, 
+            data: rows 
+        });
     });
 });
 
@@ -66,7 +113,21 @@ app.get('/reports.html', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/reports.html'));
 });
 
+// Server start
 app.listen(PORT, () => {
     console.log(`🚀 Server running: http://localhost:${PORT}`);
     console.log(`📊 Reports page: http://localhost:${PORT}/reports.html`);
+    console.log(`💾 Using SQLite database: feedback.db`);
+});
+
+// Graceful shutdown - close database connection
+process.on('SIGINT', () => {
+    db.close((err) => {
+        if (err) {
+            console.error('❌ Database close error:', err.message);
+        } else {
+            console.log('✅ Database connection closed');
+        }
+        process.exit(0);
+    });
 });
