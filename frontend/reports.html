@@ -5,12 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Feedback Reports</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        .feedback-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        #reports {
+            text-align: left;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>Feedback Reports</h1>
         <button id="loadReports">Load Reports</button>
-        <div id="reports"></div>
+        <div id="reports">
+            <p>Click "Load Reports" to see feedback data</p>
+        </div>
         <a href="index.html">Back to Form</a>
     </div>
     <script src="reports.js"></script>

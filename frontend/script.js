@@ -5,7 +5,8 @@ document.getElementById('feedbackForm').addEventListener('submit', async functio
     const data = Object.fromEntries(formData);
 
     try {
-        const response = await fetch('http://localhost:3000/feedback', {
+        // ဒီမှာ /feedback ကနေ /api/feedback ပြောင်းပါ
+        const response = await fetch('http://localhost:3000/api/feedback', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -13,14 +14,20 @@ document.getElementById('feedbackForm').addEventListener('submit', async functio
             body: JSON.stringify(data)
         });
 
-        if (response.ok) {
-            document.getElementById('message').textContent = 'Feedback submitted successfully!';
+        // Response ကို JSON ပြန်ပြောင်းပါ
+        const result = await response.json();
+        
+        if (result.success) {
+            document.getElementById('message').textContent = result.message;
+            document.getElementById('message').style.color = 'green';
             event.target.reset();
         } else {
-            document.getElementById('message').textContent = 'Error submitting feedback.';
+            document.getElementById('message').textContent = result.error || 'Error submitting feedback.';
+            document.getElementById('message').style.color = 'red';
         }
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('message').textContent = 'Error submitting feedback.';
+        document.getElementById('message').style.color = 'red';
     }
 });
