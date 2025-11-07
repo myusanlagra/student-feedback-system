@@ -1,0 +1,71 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: student-feedback-app
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and push Docker image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build Docker image
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./backend
+
+        # Push images
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+        # Export image URI for later use
+        echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+
+    - name: Update ECS service
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        aws ecs update-service \
+          --cluster student-feedback-cluster \
+          --service student-feedback-service \
+          --force-new-deployment \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Run tests
+      run: |
+        cd backend
+        npm install
+        npm test  # Add this if you have tests
+
+    - name: Notify on deployment
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        text: "Successfully deployed Student Feedback System to AWS"
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
